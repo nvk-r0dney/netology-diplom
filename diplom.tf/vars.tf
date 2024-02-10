@@ -17,6 +17,10 @@ variable "folder_id" {
   description = "Yandex.Cloud MyDefault folder ID"
 }
 
+variable "default_zone" {
+  type        = string
+  description = "Yandex.Cloud default zone"
+}
 
 ####################################
 ### --------- VPC Vars --------- ###
