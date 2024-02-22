@@ -1,1 +1,5 @@
 ---
+local_ip:
+  %{~ for i in local-adresses ~}
+  - ${i["network_interface"][0]["ip_address"]}  ${i["name"]}
+  %{~ endfor ~}

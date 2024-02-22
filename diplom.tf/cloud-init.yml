@@ -1,0 +1,20 @@
+#cloud-config
+
+users:
+  - name: admin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: sudo
+    lock_passwd: false
+    # password - netology-diplom
+    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+package_update: true
+package_upgrade: false
+packages:
+  - vim
+  - yum-utils
+  - curl
+  - git
+  - wget

@@ -1,1 +1,121 @@
 ---
+- name: Prepare nodes
+  hosts: all
+  become: true
+  tasks:
+    - name: Prepare nodes | Config hostname
+      ansible.builtin.command: "hostnamectl set-hostname {{ inventory_hostname }}"
+      register: res
+      changed_when: res.rc == 0
+
+    - name: Prepare nodes | Set DNS nodes values
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+        state: present
+      with_items: "{{ local_ip }}"
+
+- name: Install containerd.io
+  hosts: all
+  become: true
+  tasks:
+    - name: Install containerd.io | Remove previous versions
+      ansible.builtin.yum:
+        name:
+          - docker
+          - docker-client
+          - docker-client-latest
+          - docker-common
+          - docker-latest
+          - docker-latest-logrotate
+          - docker-logrotate
+          - docker-engine
+        state: absent
+
+    - name: Install containerd.io | Add Docker repo
+      ansible.builtin.yum_repository:
+        name: docker-ce
+        description: Docker-CE repo
+        baseurl:
+          - https://download.docker.com/linux/centos/$releasever/$basearch/stable
+        gpgcheck: true
+        gpgkey:
+          - https://download.docker.com/linux/centos/gpg
+        enabled: true
+
+    - name: Install containerd.io | Install package
+      ansible.builtin.yum:
+        name:
+          - containerd.io
+        state: present
+      notify: Start containerd.io daemon
+
+    - name: Install containerd.io | Remove containerd config file
+      ansible.builtin.file:
+        path: /etc/containerd/config.toml
+        state: absent
+      notify: Restart containerd.io daemon
+
+  handlers:
+    - name: Start containerd.io daemon
+      ansible.builtin.service:
+        name: containerd
+        enabled: true
+        state: started
+    - name: Restart containerd.io daemon
+      ansible.builtin.service:
+        name: containerd
+        state: restarted
+
+- name: Prepare to install Kubernetes
+  hosts: all
+  become: true
+  tasks:
+    - name: Prepare to install Kubernetes | Add Kube repo
+      ansible.builtin.yum_repository:
+        name: Kubernetes
+        description: Kubernetes Repository
+        baseurl:
+          - https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+        enabled: true
+        gpgcheck: true
+        repo_gpgcheck: true
+        gpgkey:
+          - https://packages.cloud.google.com/yum/doc/yum-key.gpg
+          - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+    - name: Prepare to install Kubernetes | Add Kubernetes config-file
+      ansible.builtin.template:
+        src: ./templates/kubernetes.conf.j2
+        dest: /etc/sysctl.d/kubernetes.conf
+        mode: "0644"
+
+    - name: Prepare to install Kubernetes | Exec commands
+      ansible.builtin.command: "{{ item }}"
+      with_items:
+        - modprobe overlay
+        - modprobe br_netfilter
+        - sysctl --system
+        - swapoff -a
+      register: result
+      changed_when: result.rc == 0
+
+- name: Install Kubernetes
+  become: true
+  hosts: all
+  tasks:
+    - name: Install Kubernetes | Install packages
+      ansible.builtin.yum:
+        name:
+          - kubectl
+          - kubeadm
+          - kubelet
+        state: present
+      notify: Start kubelet service
+
+  handlers:
+    - name: Start kubelet service
+      ansible.builtin.service:
+        name: kubelet
+        enabled: true
+        state: started

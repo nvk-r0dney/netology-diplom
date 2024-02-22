@@ -6,18 +6,21 @@ terraform {
   }
   required_version = ">=0.107.0"
 
-  /*   backend "s3" {
+  backend "s3" {
     endpoints = {
-      s3 = "https://storage.yandexcloud.net"
+      s3       = "https://storage.yandexcloud.net"
+      dynamodb = "https://docapi.serverless.yandexcloud.net/ru-central1/b1gqm95h91idg2ffi5la/etne4c7rs7nm1h1uh5f6"
     }
-    bucket                      = "my-netology-tfstate-bucket"
+    bucket                      = "net-s3-tfstate"
     region                      = "ru-central1"
     key                         = "terraform.tfstate"
     skip_region_validation      = true
     skip_credentials_validation = true
     skip_requesting_account_id  = true
     skip_s3_checksum            = true
-  } */
+
+    dynamodb_table = "lock-table"
+  }
 }
 
 provider "yandex" {
