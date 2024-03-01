@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: diplom-ingress-mon
+  namespace: monitoring
+  labels:
+    name: diplom-ingress-mon
+    author: nvk-r0dney
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: shapoval0ff.com
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/"
+            backend:
+              service:
+                name: monitoring-grafana
+                port:
+                  number: 80

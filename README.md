@@ -1408,4 +1408,586 @@ Destroy complete! Resources: 7 destroyed.
 
 Все команды Terraform выполняются без каких либо дополнительных действий. Можно приступать к настройкам нод кластера и последующей инициализации самого Kubernetes-кластера.
 
+<br />
+
 ### Запустить и сконфигурировать Kubernetes кластер
+
+Конфигурацию нод кластера выполняет Ansible Playbook. Описание и функционал самого Playbook представлены в Readme-файле самого Ansible-проекта - <a href="./ansible-playbook/readme.md">ссылка на описание</a>
+
+По факту готовности виртуальных машин в облаке можно запустить выполнение Playbook командой `ansible-playbook -i ./inventory/hosts.yml main.yml`. Результат выполнения Playbook будет ниже.
+
+<details><summary>Результат выполнения Playbook</summary>
+
+```bash
+rodney@arch-home: /home/rodney/learning/kirill-shapovalov-netologydiplom/ansible-playbook git:(main) ✗ 
+➜   ansible-playbook -i ./inventory/hosts.yml main.yml 
+
+PLAY [Prepare nodes] ******************************************************************************************************
+
+TASK [Gathering Facts] ****************************************************************************************************
+ok: [k8s-node-03]
+ok: [k8s-node-01]
+ok: [k8s-node-02]
+
+TASK [Prepare nodes | Config hostname] ************************************************************************************
+changed: [k8s-node-03]
+changed: [k8s-node-01]
+changed: [k8s-node-02]
+
+TASK [Prepare nodes | Set DNS nodes values] *******************************************************************************
+changed: [k8s-node-01] => (item=192.168.10.8  k8s-node-01)
+changed: [k8s-node-03] => (item=192.168.10.8  k8s-node-01)
+changed: [k8s-node-02] => (item=192.168.10.8  k8s-node-01)
+changed: [k8s-node-01] => (item=192.168.10.24  k8s-node-02)
+changed: [k8s-node-03] => (item=192.168.10.24  k8s-node-02)
+changed: [k8s-node-02] => (item=192.168.10.24  k8s-node-02)
+changed: [k8s-node-03] => (item=192.168.10.12  k8s-node-03)
+changed: [k8s-node-01] => (item=192.168.10.12  k8s-node-03)
+changed: [k8s-node-02] => (item=192.168.10.12  k8s-node-03)
+
+PLAY [Install containerd.io] ***********************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************
+ok: [k8s-node-01]
+ok: [k8s-node-03]
+ok: [k8s-node-02]
+
+TASK [Install containerd.io | Remove previous versions] ********************************************************************
+ok: [k8s-node-03]
+ok: [k8s-node-01]
+ok: [k8s-node-02]
+
+TASK [Install containerd.io | Add Docker repo] *****************************************************************************
+changed: [k8s-node-03]
+changed: [k8s-node-01]
+changed: [k8s-node-02]
+
+TASK [Install containerd.io | Install package] *****************************************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-02]
+changed: [k8s-node-03]
+
+TASK [Install containerd.io | Remove containerd config file] ***************************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-03]
+changed: [k8s-node-02]
+
+RUNNING HANDLER [Start containerd.io daemon] *******************************************************************************
+changed: [k8s-node-03]
+changed: [k8s-node-01]
+changed: [k8s-node-02]
+
+RUNNING HANDLER [Restart containerd.io daemon] *****************************************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-03]
+changed: [k8s-node-02]
+
+PLAY [Prepare to install Kubernetes] ***************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************
+ok: [k8s-node-01]
+ok: [k8s-node-03]
+ok: [k8s-node-02]
+
+TASK [Prepare to install Kubernetes | Add Kube repo] ***********************************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-03]
+changed: [k8s-node-02]
+
+TASK [Prepare to install Kubernetes | Add Kubernetes config-file] **********************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-03]
+changed: [k8s-node-02]
+
+TASK [Prepare to install Kubernetes | Exec commands] ***********************************************************************
+changed: [k8s-node-03] => (item=modprobe overlay)
+changed: [k8s-node-01] => (item=modprobe overlay)
+changed: [k8s-node-02] => (item=modprobe overlay)
+changed: [k8s-node-03] => (item=modprobe br_netfilter)
+changed: [k8s-node-01] => (item=modprobe br_netfilter)
+changed: [k8s-node-02] => (item=modprobe br_netfilter)
+changed: [k8s-node-03] => (item=sysctl --system)
+changed: [k8s-node-01] => (item=sysctl --system)
+changed: [k8s-node-02] => (item=sysctl --system)
+changed: [k8s-node-03] => (item=swapoff -a)
+changed: [k8s-node-01] => (item=swapoff -a)
+changed: [k8s-node-02] => (item=swapoff -a)
+
+PLAY [Install Kubernetes] **************************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************
+ok: [k8s-node-01]
+ok: [k8s-node-03]
+ok: [k8s-node-02]
+
+TASK [Install Kubernetes | Install packages] ********************************************************************************
+changed: [k8s-node-03]
+changed: [k8s-node-01]
+changed: [k8s-node-02]
+
+RUNNING HANDLER [Start kubelet service] *************************************************************************************
+changed: [k8s-node-01]
+changed: [k8s-node-03]
+changed: [k8s-node-02]
+
+PLAY RECAP *******************************************************************************************************************
+k8s-node-01                : ok=17   changed=12   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+k8s-node-02                : ok=17   changed=12   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+k8s-node-03                : ok=17   changed=12   unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+```
+
+</details>
+
+Playbook успешно применен, осталось провести инициализацию и сборку кластера. Как я говорил ранее - инициализацию и сборку кластера выполняю вручную.
+
+Подключаюсь на ноду, которая станет мастером, выполняю команду:
+
+```bash
+sudo kubeadm init --v=5 --control-plane-endpoint=k8s-node-01 --pod-network-cidr=10.244.0.0/16 --service-cidr=10.240.0.0/16
+```
+
+Инициализация прошла без ошибок. Результат инициализации на скриншоте ниже:
+
+<img src="./images/04-control-plane-init.png" width="800px" height="auto" />
+
+Добавлю остальные ноды в кластер и запускаю деплой сетевого контроллера, чтобы кластер вышел в полностью рабочий статус - Ready.
+
+Для добавления воркер-нод нужно выполнить на каждой воркер-ноде следующую команду:
+
+```bash
+sudo kubeadm join k8s-node-01:6443 --token r5dmtn.ggs13kyue7kvw344 --discovery-token-ca-cert-hash sha256:72bebe96d741bf13775969be2fa2f7c6cb8f1a6b816b33740f455397af40e9c4 
+```
+
+Результаты добавления воркер-нод:
+
+<img src="./images/05-add-worker-node-01.png" width="800px" height="auto" />
+
+<img src="./images/06-add-worker-node-02.png" width="800px" height="auto" />
+
+Воркер-ноды успешно добавлены. Проверяю, что кластер собран и ставлю сетевой контроллер.
+
+<img src="./images/07-cluster-complete.png" width="800px" height="auto" />
+
+Для настройки сети буду использовать `Flannel`. Деплой осуществляется командой, указанной в официальной документации:
+
+```bash
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+```
+
+<img src="./images/08-deploy-flannel.png" width="800px" height="auto" />
+
+После того, как выполнен деплой Flannel - нужно немного подождать, пока будут запущены все экземпляры агента, после чего начнет работать dns и можно будет проверить, готов ли кластер для полноценной сетевой работы.
+
+Проверяю кластер:
+
+<img src="./images/09-cluster-ready.png" width="800px" height="auto" />
+
+Итак, подготовка кластера выполнена полностью. Кластер выведен полностью в рабочее состояние. Следующим этапом нужно осуществить деплой системы мониторинга в кластер. Об этом и пойдет речь в следующем разделе.
+
+<br />
+
+### Подготовка системы мониторинга
+
+Систему мониторинга буду устанавливать с помощью Helm. Первоначально нужно добавить репозиторий. Результат добавления на скриншотах ниже.
+
+<img src="./images/10-add-prometheus-helm-repo.png" width="800px" height="auto" />
+
+После того, как репозиторий успешно добавлен, можно приступать к установке самой системы мониторинга. Для этого буду использовать helm-chart `kube-prometheus-stack`. Для установки я скачал стандартный файл `values.yaml` для данного чарта, немного отредактировал его под свои нужды - отключил ingress для Grafana. На текущем этапе он мне не нужен, я добавлю свой собственный Ingress Controller и напишу свои Ingress Rules на следующем этапе дипломной работы, где буду добавлять собственное приложение. 
+
+Итак, устанавливаю систему мониторинга:
+
+<img src="./images/11-deploy-monitoring.png" width="800px" height="auto" />
+
+Проверяю, что было создано при деплое:
+
+<img src="./images/12-pods-svc-monitoring.png" width="800px" height="auto" />
+
+Пока для того, чтобы проверить работу системы мониторинга - воспользуюсь командой 
+
+`kubectl port-forward svc/monitoring-grafana -n monitoring --address 0.0.0.0 8080:80`
+
+<img src="./images/14-port-forward-to-grafana.png" width="800px" height="auto" />
+
+Теперь можно перейти по адресу моего кластера по порту 8080 и убедиться что работает веб-интерфейс Grafana, а внутри поступают все данные.
+
+<img src="./images/13-monitoring-is-ready.png" width="800px" height="auto" />
+
+Система мониторинга готова к работе. На следующем этапе я добавлю ingress, и доступ к приложению и системе мониторинга будет осуществляться по красивым dns именам.
+
+<br />
+
+### Создание тестового приложения и деплой его в Kubernetes-кластер
+
+В качестве собственного приложения выступит небольшая jQuery Image Gallery, созданная с помощью фреймворка Django.
+
+Весь проект находится в каталоге <a href="./diplom-app/">diplom-app</a>.
+
+Для сборки образа написал небольшой Dockerfile:
+
+```dockerfile
+FROM python:3.9.18
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE 1
+
+RUN pip install --no-cache-dir --upgrade pip
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY webapp /webapp
+RUN chmod -R 777 /webapp
+WORKDIR /webapp
+
+EXPOSE 8000
+
+CMD ["gunicorn", "-c", "gunicorn.py", "webapp.wsgi:application"]
+```
+
+В файле `requirements.txt` указан фреймворк Django, который должен быть установлен и включен в образ приложения.
+
+Сама сборка осуществляется на базовом образе `python` версии 3.9.18, в образ копируется каталог самого приложения, он же устанавливается как рабочий. После добавления фреймворка Django указана команда, которая будет передана в ENTRYPOINT и будет выполнена при запуске контейнера.
+
+Для базового запуска приложения буду пушить Docker-Image в глобальный dockerhub, позднее на этапе автоматизации настрою хранение образа в локальном Container Registry.
+
+Можно переходить к сборке образа моего приложения.
+
+<details><summary>Сборка Docker Image</summary>
+
+```bash
+rodney@arch-home: /home/rodney/learning/kirill-shapovalov-netologydiplom/diplom-app git:(main) ✗ 
+➜   sudo docker build -t diplom-app .                 
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  1.585MB
+Step 1/11 : FROM python:3.9.18
+3.9.18: Pulling from library/python
+7bb465c29149: Pull complete 
+2b9b41aaa3c5: Pull complete 
+49b40be4436e: Pull complete 
+c558fac597f8: Pull complete 
+11402150a57e: Pull complete 
+d662c27d7e57: Pull complete 
+26ff257bfcf1: Pull complete 
+5a8f6c8c0bd2: Pull complete 
+Digest: sha256:383d072c4b840507f25453c710969aa1e1d13e47731f294a8a8890e53f834bdf
+Status: Downloaded newer image for python:3.9.18
+ ---> e301b6ca4781
+Step 2/11 : ENV PYTHONUNBUFFERED=1
+ ---> Running in 9d72ff661cb7
+ ---> Removed intermediate container 9d72ff661cb7
+ ---> ecd9abdfd4e3
+Step 3/11 : ENV PYTHONDONTWRITEBYTECODE 1
+ ---> Running in a00040d2c3e7
+ ---> Removed intermediate container a00040d2c3e7
+ ---> 05c9ca0cc361
+Step 4/11 : RUN pip install --no-cache-dir --upgrade pip
+ ---> Running in 2ad90e08a15b
+Requirement already satisfied: pip in /usr/local/lib/python3.9/site-packages (23.0.1)
+Collecting pip
+  Downloading pip-24.0-py3-none-any.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 2.6 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 23.0.1
+    Uninstalling pip-23.0.1:
+      Successfully uninstalled pip-23.0.1
+Successfully installed pip-24.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+ ---> Removed intermediate container 2ad90e08a15b
+ ---> 2dd425469347
+Step 5/11 : COPY requirements.txt .
+ ---> 843708b50fe6
+Step 6/11 : RUN pip install --no-cache-dir -r requirements.txt
+ ---> Running in b44d0b0ccb1e
+Collecting django==4.2.7 (from -r requirements.txt (line 1))
+  Downloading Django-4.2.7-py3-none-any.whl.metadata (4.1 kB)
+Collecting django-environ (from -r requirements.txt (line 2))
+  Downloading django_environ-0.11.2-py2.py3-none-any.whl.metadata (11 kB)
+Collecting gunicorn (from -r requirements.txt (line 3))
+  Downloading gunicorn-21.2.0-py3-none-any.whl.metadata (4.1 kB)
+Collecting requests (from -r requirements.txt (line 4))
+  Downloading requests-2.31.0-py3-none-any.whl.metadata (4.6 kB)
+Collecting django-dotenv (from -r requirements.txt (line 5))
+  Downloading django_dotenv-1.4.2-py2.py3-none-any.whl (3.8 kB)
+Collecting django-storages (from -r requirements.txt (line 6))
+  Downloading django_storages-1.14.2-py3-none-any.whl.metadata (63 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 63.0/63.0 kB 680.9 kB/s eta 0:00:00
+Collecting boto3 (from -r requirements.txt (line 7))
+  Downloading boto3-1.34.49-py3-none-any.whl.metadata (6.6 kB)
+Collecting asgiref<4,>=3.6.0 (from django==4.2.7->-r requirements.txt (line 1))
+  Downloading asgiref-3.7.2-py3-none-any.whl.metadata (9.2 kB)
+Collecting sqlparse>=0.3.1 (from django==4.2.7->-r requirements.txt (line 1))
+  Downloading sqlparse-0.4.4-py3-none-any.whl.metadata (4.0 kB)
+Collecting packaging (from gunicorn->-r requirements.txt (line 3))
+  Downloading packaging-23.2-py3-none-any.whl.metadata (3.2 kB)
+Collecting charset-normalizer<4,>=2 (from requests->-r requirements.txt (line 4))
+  Downloading charset_normalizer-3.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (33 kB)
+Collecting idna<4,>=2.5 (from requests->-r requirements.txt (line 4))
+  Downloading idna-3.6-py3-none-any.whl.metadata (9.9 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->-r requirements.txt (line 4))
+  Downloading urllib3-2.2.1-py3-none-any.whl.metadata (6.4 kB)
+Collecting certifi>=2017.4.17 (from requests->-r requirements.txt (line 4))
+  Downloading certifi-2024.2.2-py3-none-any.whl.metadata (2.2 kB)
+Collecting botocore<1.35.0,>=1.34.49 (from boto3->-r requirements.txt (line 7))
+  Downloading botocore-1.34.49-py3-none-any.whl.metadata (5.7 kB)
+Collecting jmespath<2.0.0,>=0.7.1 (from boto3->-r requirements.txt (line 7))
+  Downloading jmespath-1.0.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting s3transfer<0.11.0,>=0.10.0 (from boto3->-r requirements.txt (line 7))
+  Downloading s3transfer-0.10.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting typing-extensions>=4 (from asgiref<4,>=3.6.0->django==4.2.7->-r requirements.txt (line 1))
+  Downloading typing_extensions-4.9.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting python-dateutil<3.0.0,>=2.1 (from botocore<1.35.0,>=1.34.49->boto3->-r requirements.txt (line 7))
+  Downloading python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 247.7/247.7 kB 2.1 MB/s eta 0:00:00
+Collecting urllib3<3,>=1.21.1 (from requests->-r requirements.txt (line 4))
+  Downloading urllib3-1.26.18-py2.py3-none-any.whl.metadata (48 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.9/48.9 kB 5.0 MB/s eta 0:00:00
+Collecting six>=1.5 (from python-dateutil<3.0.0,>=2.1->botocore<1.35.0,>=1.34.49->boto3->-r requirements.txt (line 7))
+  Downloading six-1.16.0-py2.py3-none-any.whl (11 kB)
+Downloading Django-4.2.7-py3-none-any.whl (8.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.0/8.0 MB 5.9 MB/s eta 0:00:00
+Downloading django_environ-0.11.2-py2.py3-none-any.whl (19 kB)
+Downloading gunicorn-21.2.0-py3-none-any.whl (80 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.2/80.2 kB 4.8 MB/s eta 0:00:00
+Downloading requests-2.31.0-py3-none-any.whl (62 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.6/62.6 kB 4.0 MB/s eta 0:00:00
+Downloading django_storages-1.14.2-py3-none-any.whl (47 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 47.1/47.1 kB 8.2 MB/s eta 0:00:00
+Downloading boto3-1.34.49-py3-none-any.whl (139 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 139.3/139.3 kB 5.2 MB/s eta 0:00:00
+Downloading asgiref-3.7.2-py3-none-any.whl (24 kB)
+Downloading botocore-1.34.49-py3-none-any.whl (12.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.0/12.0 MB 5.1 MB/s eta 0:00:00
+Downloading certifi-2024.2.2-py3-none-any.whl (163 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 163.8/163.8 kB 5.3 MB/s eta 0:00:00
+Downloading charset_normalizer-3.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (142 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 142.3/142.3 kB 5.9 MB/s eta 0:00:00
+Downloading idna-3.6-py3-none-any.whl (61 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.6/61.6 kB 5.9 MB/s eta 0:00:00
+Downloading jmespath-1.0.1-py3-none-any.whl (20 kB)
+Downloading s3transfer-0.10.0-py3-none-any.whl (82 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 82.1/82.1 kB 4.4 MB/s eta 0:00:00
+Downloading sqlparse-0.4.4-py3-none-any.whl (41 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 41.2/41.2 kB 5.5 MB/s eta 0:00:00
+Downloading urllib3-1.26.18-py2.py3-none-any.whl (143 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 143.8/143.8 kB 3.8 MB/s eta 0:00:00
+Downloading packaging-23.2-py3-none-any.whl (53 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 53.0/53.0 kB 3.5 MB/s eta 0:00:00
+Downloading typing_extensions-4.9.0-py3-none-any.whl (32 kB)
+Installing collected packages: django-dotenv, urllib3, typing-extensions, sqlparse, six, packaging, jmespath, idna, django-environ, charset-normalizer, certifi, requests, python-dateutil, gunicorn, asgiref, django, botocore, s3transfer, django-storages, boto3
+Successfully installed asgiref-3.7.2 boto3-1.34.49 botocore-1.34.49 certifi-2024.2.2 charset-normalizer-3.3.2 django-4.2.7 django-dotenv-1.4.2 django-environ-0.11.2 django-storages-1.14.2 gunicorn-21.2.0 idna-3.6 jmespath-1.0.1 packaging-23.2 python-dateutil-2.8.2 requests-2.31.0 s3transfer-0.10.0 six-1.16.0 sqlparse-0.4.4 typing-extensions-4.9.0 urllib3-1.26.18
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+ ---> Removed intermediate container b44d0b0ccb1e
+ ---> effbe10d33f9
+Step 7/11 : COPY webapp /webapp
+ ---> 5a8abbd37144
+Step 8/11 : RUN chmod -R 777 /webapp
+ ---> Running in bb7e8ef1161a
+ ---> Removed intermediate container bb7e8ef1161a
+ ---> a56d491df22b
+Step 9/11 : WORKDIR /webapp
+ ---> Running in 8f99d69da9dc
+ ---> Removed intermediate container 8f99d69da9dc
+ ---> c6f59e10b26a
+Step 10/11 : EXPOSE 8000
+ ---> Running in 942a3f496f1b
+ ---> Removed intermediate container 942a3f496f1b
+ ---> 72ae7f0c7d18
+Step 11/11 : CMD ["gunicorn", "-c", "gunicorn.py", "webapp.wsgi:application"]
+ ---> Running in 60961a7a1df1
+ ---> Removed intermediate container 60961a7a1df1
+ ---> 4efdaa070d0e
+Successfully built 4efdaa070d0e
+Successfully tagged diplom-app:latest
+```
+
+</details>
+
+<br />
+
+Выведу список образов, чтобы убедиться, что нужный образ собран.
+
+<img src="./images/15-docker-image.png" width="800px" height="auto" />
+
+Запушу образ в глобальный dockerhub.
+
+<img src="./images/16-docker-push.png" width="800px" height="auto" />
+
+Проверю, что образ появился:
+
+<img src="./images/17-dockerhub.png" width="800px" height="auto" />
+
+Отлично, образ приложения собран. Перехожу к деплою приложения в Kubernetes кластер.
+
+Для деплоя написал манифест <a href="./kubernetes/deployment.yaml">deployment.yaml</a>, который описывает создание namespace, deployment и service.
+
+<details><summary>Манифест</summary>
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: diplom-app
+  labels:
+    author: nvk-r0dney
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diplom-app-deployment
+  namespace: diplom-app
+  labels:
+    app: webapp
+    author: nvk-r0dney
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+        - name: webapp
+          image: r0dney/diplom-app:1.0.5
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+              name: http-port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diplom-app-svc
+  namespace: diplom-app
+  labels:
+    author: nvk-r0dney
+spec:
+  selector:
+    app: webapp
+  ports:
+    - port: 8080
+      targetPort: http-port
+      name: svc-http-port
+```
+</details>
+
+<br />
+
+Применяю манифест:
+
+<img src="./images/18-deploy-app.png" width="800px" height="auto" />
+
+Проверяю, что все создалось успешно:
+
+<img src="./images/19-all-in-diplom-namespace.png" width="800px" height="auto" />
+
+Все создалось успешно. Осталось установить и настроить Ingress для получения нормального доступа к приложениям кластера.
+
+Для того, чтобы установленный Ingress Controller корректно работал - необходим балансировщик. В случае, если используется локальный кластер Kubernetes - можно воспользоваться проектом MetalLB, можно развернуть балансировщик в локальной сети. Так как мы используем Yandex.Cloud - создам сетевой балансировщик в облаке.
+
+Деплой Ingress Controller выполню с помощью манифеста <a href="./kubernetes/ingress-controller.yaml">ingress-controller.yaml</a>. Это стандартный манифест, сгенерированный из Helm-чарта, из которого были удалены helm-тэги.
+
+Применение манифеста:
+
+<img src="./images/20-create-ingress.png" width="800px" height="auto" />
+
+Посмотрим, что создалось после применения манифеста:
+
+<img src="./images/21-created-controller.png" width="800px" height="auto" />
+
+Как я уже говорил ранее - нужен баласировщик и я его создал в облаке:
+
+<img src="./images/22-yandex-network-lb.png" width="800px" height="auto" />
+
+Остается применить ingress rules и проверить что работает система мониторинга и мое приложение.
+
+Ingress Rules для системы мониторинга:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: diplom-ingress-mon
+  namespace: monitoring
+  labels:
+    name: diplom-ingress-mon
+    author: nvk-r0dney
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: shapoval0ff.com
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/"
+            backend:
+              service:
+                name: monitoring-grafana
+                port:
+                  number: 80
+```
+
+Ingress Rules для веб-приложения:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: diplom-ingress-app
+  namespace: diplom-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  labels:
+    name: diplom-ingress-app
+    author: nvk-r0dney
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: shapoval0ff.com
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/webapp"
+            backend:
+              service:
+                name: diplom-app-svc
+                port:
+                  number: 8080
+```
+
+Применяю:
+
+<img src="./images/23-apply-ingress-rules.png" width="800px" height="auto" />
+
+Проверяю:
+
+<img src="./images/24-running-monitoring.png" width="800px" height="auto" />
+
+Система мониторинга работает, Ingress успешно применился.
+
+<img src="./images/25-running-webapp.png" width="800px" height="auto" />
+
+Галерея изображений также успешно работает по доменному имени, Ingress успешно применен.
+
+Итог - сборка и деплой приложения выполнены, осуществлен деплой Ingress контроллера, его настройка. Применены Ingress rules для работы сервисов в Kubernetes по доменным именам.
+
+В следующей части я осуществлю автоматизацию создания инфраструктуры, сборку и деплой приложения с помощью Gitlab CI/CD.
+
+<br />
+
+### Автоматизация создания инфраструктуры, сборки и деплоя приложения с использованием Gitlab CI/CD
+

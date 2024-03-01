@@ -1,0 +1,7 @@
+django==4.2.7
+django-environ
+gunicorn
+requests
+django-dotenv
+django-storages
+boto3

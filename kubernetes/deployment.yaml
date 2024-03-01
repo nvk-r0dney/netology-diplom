@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: diplom-app
+  labels:
+    author: nvk-r0dney
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diplom-app-deployment
+  namespace: diplom-app
+  labels:
+    app: webapp
+    author: nvk-r0dney
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 100%
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+        - name: webapp
+          image: r0dney/diplom-app:1.0.5
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+              name: http-port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diplom-app-svc
+  namespace: diplom-app
+  labels:
+    author: nvk-r0dney
+spec:
+  selector:
+    app: webapp
+  ports:
+    - port: 8080
+      targetPort: http-port
+      name: svc-http-port

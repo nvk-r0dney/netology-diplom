@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block tile %}{{ title }}{% endblock %}
+
+{% block content %}
+
+<div class="gallery">
+	<div class="gallery__bg"><img src="#" /></div>
+	<div class="gallery__search">
+		<label htmlFor="first">Show me pictures of</label>
+		<input id="first" type="text" name="textfield" value="mountains" />
+	</div>
+	<div class="gallery__main">
+		<div class="gallery__core"><img src="#" /></div>
+		<div class="gallery__track"></div>
+	</div>
+</div>
+
+{% endblock %}
