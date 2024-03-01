@@ -1,0 +1,48 @@
+stages:
+  - validate
+  - plan
+  - apply
+  - destroy
+image:
+  name: hashicorp/terraform:latest
+  entrypoint:
+    - "/usr/bin/env"
+    - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+default:
+  before_script:
+    - export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+    - export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+    - cp .terraformrc /root/.terraformrc
+    - terraform --version
+    - terraform init
+
+validate:
+  stage: validate
+  tags:
+    - ntlb-runner
+  script:
+    - terraform validate
+
+plan:
+  stage: plan
+  tags:
+    - ntlb-runner
+  script:
+    - terraform plan
+
+apply:
+  stage: apply
+  tags:
+    - ntlb-runner
+  when: manual
+  script:
+    - terraform apply -auto-approve
+
+destroy:
+  stage: destroy
+  tags:
+    - ntlb-runner
+  when: manual
+  script:
+    - terraform destroy -auto-approve

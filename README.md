@@ -1991,3 +1991,1412 @@ spec:
 
 ### Автоматизация создания инфраструктуры, сборки и деплоя приложения с использованием Gitlab CI/CD
 
+Для автоматизации создания инфраструктуры создал приватный репозиторий со скриптами Terraform в личном Gitlab:
+
+<img src="./images/26-gitlab-repo-for-infra.png" width="800px" height="auto" />
+
+Так как файл `personal.auto.tfvars` находится в gitignore-файле - необходимо все переменные из него переместить в CI Variables проекта в Gitlab.
+
+<img src="./images/27-gitlab-vars.png" width="800px" height="auto" />
+
+Дополнительно добавил две переменных `YC_ACCESS_KEY_ID` и `YC_SECRET_ACCESS_KEY`, в которые записал id и ключ от сервисного аккаунта в облаке для доступа к S3-бакету, чтоб хранить tfstate-файл.
+
+Для создания инфраструктуры написан файл `gitlab-ci.yml` (находится в корне репозитория).
+
+<details><summary><b>.gitlab-ci.yml</b></summary>
+
+```yaml
+stages:
+  - validate
+  - plan
+  - apply
+  - destroy
+image:
+  name: hashicorp/terraform:latest
+  entrypoint:
+    - "/usr/bin/env"
+    - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+default:
+  before_script:
+    - export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+    - export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+    - cp .terraformrc /root/.terraformrc
+    - terraform --version
+    - terraform init
+
+validate:
+  stage: validate
+  tags:
+    - ntlb-runner
+  script:
+    - terraform validate
+
+plan:
+  stage: plan
+  tags:
+    - ntlb-runner
+  script:
+    - terraform plan
+
+apply:
+  stage: apply
+  tags:
+    - ntlb-runner
+  when: manual
+  script:
+    - terraform apply -auto-approve
+
+destroy:
+  stage: destroy
+  tags:
+    - ntlb-runner
+  when: manual
+  script:
+    - terraform destroy -auto-approve
+```
+
+</details>
+
+<br />
+
+Результат запуска Pipeline:
+
+<img src="./images/28-pipeline-jobs.png" width="800px" height="auto" />
+
+<details><summary><b>Job#1 - Validate | Log</b></summary>
+
+```bash
+Running with gitlab-runner 16.9.0 (656c1943)
+  on ntlb-runner o3xFgXuYL, system ID: s_47241d5b23e7
+Resolving secrets
+00:00
+Preparing the "docker" executor
+00:04
+Using Docker executor with image hashicorp/terraform:latest ...
+Pulling docker image hashicorp/terraform:latest ...
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+Preparing environment
+00:00
+Running on runner-o3xfgxuyl-project-3-concurrent-0 via ntlb-runner...
+Getting source from Git repository
+00:02
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/netology/yc-infrastructure/.git/
+Checking out 4610a5f8 as detached HEAD (ref is main)...
+Removing .terraform.lock.hcl
+Removing .terraform/
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+00:18
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+$ export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+$ export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+$ cp .terraformrc /root/.terraformrc
+$ terraform --version
+Terraform v1.7.4
+on linux_amd64
+$ terraform init
+Initializing the backend...
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of hashicorp/local...
+- Finding latest version of hashicorp/template...
+- Finding latest version of yandex-cloud/yandex...
+- Installing hashicorp/local v2.4.1...
+- Installed hashicorp/local v2.4.1 (unauthenticated)
+- Installing hashicorp/template v2.2.0...
+- Installed hashicorp/template v2.2.0 (unauthenticated)
+- Installing yandex-cloud/yandex v0.109.0...
+- Installed yandex-cloud/yandex v0.109.0 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced
+│ to calculate lock file checksums locally for the following providers:
+│   - hashicorp/local
+│   - hashicorp/template
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for
+│ linux_amd64, so Terraform running on another platform will fail to install
+│ these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+$ terraform validate
+Success! The configuration is valid.
+Cleaning up project directory and file based variables
+00:01
+Job succeeded
+```
+
+</details>
+
+<br />
+
+<details><summary><b>Job#2 - Plan | Log</b></summary>
+
+```bash
+Running with gitlab-runner 16.9.0 (656c1943)
+  on ntlb-runner o3xFgXuYL, system ID: s_47241d5b23e7
+Resolving secrets
+00:00
+Preparing the "docker" executor
+00:04
+Using Docker executor with image hashicorp/terraform:latest ...
+Pulling docker image hashicorp/terraform:latest ...
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+Preparing environment
+00:01
+Running on runner-o3xfgxuyl-project-3-concurrent-0 via ntlb-runner...
+Getting source from Git repository
+00:01
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/netology/yc-infrastructure/.git/
+Checking out 4610a5f8 as detached HEAD (ref is main)...
+Removing .terraform.lock.hcl
+Removing .terraform/
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+00:20
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+$ export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+$ export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+$ cp .terraformrc /root/.terraformrc
+$ terraform --version
+Terraform v1.7.4
+on linux_amd64
+$ terraform init
+Initializing the backend...
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of yandex-cloud/yandex...
+- Finding latest version of hashicorp/local...
+- Finding latest version of hashicorp/template...
+- Installing yandex-cloud/yandex v0.109.0...
+- Installed yandex-cloud/yandex v0.109.0 (unauthenticated)
+- Installing hashicorp/local v2.4.1...
+- Installed hashicorp/local v2.4.1 (unauthenticated)
+- Installing hashicorp/template v2.2.0...
+- Installed hashicorp/template v2.2.0 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced
+│ to calculate lock file checksums locally for the following providers:
+│   - hashicorp/local
+│   - hashicorp/template
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for
+│ linux_amd64, so Terraform running on another platform will fail to install
+│ these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+$ terraform plan
+Acquiring state lock. This may take a few moments...
+data.yandex_compute_image.vm-image: Reading...
+data.template_file.cloudinit: Reading...
+data.template_file.cloudinit: Read complete after 0s [id=7dada99b1a5900b0a2447da452bf65e7ab31407994f179670fbb86b1b29b58eb]
+data.yandex_compute_image.vm-image: Read complete after 2s [id=fd8p3qkkviv008rkeb83]
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+Terraform will perform the following actions:
+  # local_file.ansible-inventory will be created
+  + resource "local_file" "ansible-inventory" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "../ansible-playbook/inventory/hosts.yml"
+      + id                   = (known after apply)
+    }
+  # local_file.local-address will be created
+  + resource "local_file" "local-address" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "../ansible-playbook/group_vars/all/local_ip.yml"
+      + id                   = (known after apply)
+    }
+  # yandex_compute_instance.kube-node["0"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-01"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-01"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_compute_instance.kube-node["1"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-02"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-02"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_compute_instance.kube-node["2"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-03"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-03"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_vpc_network.cloud-network will be created
+  + resource "yandex_vpc_network" "cloud-network" {
+      + created_at                = (known after apply)
+      + default_security_group_id = (known after apply)
+      + folder_id                 = "[MASKED]"
+      + id                        = (known after apply)
+      + labels                    = (known after apply)
+      + name                      = "diplom-network"
+      + subnet_ids                = (known after apply)
+    }
+  # yandex_vpc_subnet.vpc-subnet will be created
+  + resource "yandex_vpc_subnet" "vpc-subnet" {
+      + created_at     = (known after apply)
+      + folder_id      = (known after apply)
+      + id             = (known after apply)
+      + labels         = (known after apply)
+      + name           = "public"
+      + network_id     = (known after apply)
+      + v4_cidr_blocks = [
+          + "192.168.10.0/24",
+        ]
+      + v6_cidr_blocks = (known after apply)
+      + zone           = "[MASKED]"
+    }
+Plan: 7 to add, 0 to change, 0 to destroy.
+─────────────────────────────────────────────────────────────────────────────
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+Cleaning up project directory and file based variables
+00:01
+Job succeeded
+```
+
+</details>
+
+<br />
+
+<details><summary><b>Job#3 - Apply | Log</b></summary>
+
+```bash
+Running with gitlab-runner 16.9.0 (656c1943)
+  on ntlb-runner o3xFgXuYL, system ID: s_47241d5b23e7
+Resolving secrets
+00:00
+Preparing the "docker" executor
+00:04
+Using Docker executor with image hashicorp/terraform:latest ...
+Pulling docker image hashicorp/terraform:latest ...
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+Preparing environment
+00:01
+Running on runner-o3xfgxuyl-project-3-concurrent-0 via ntlb-runner...
+Getting source from Git repository
+00:01
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/netology/yc-infrastructure/.git/
+Checking out 4610a5f8 as detached HEAD (ref is main)...
+Removing .terraform.lock.hcl
+Removing .terraform/
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+01:02
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+$ export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+$ export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+$ cp .terraformrc /root/.terraformrc
+$ terraform --version
+Terraform v1.7.4
+on linux_amd64
+$ terraform init
+Initializing the backend...
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of hashicorp/local...
+- Finding latest version of hashicorp/template...
+- Finding latest version of yandex-cloud/yandex...
+- Installing hashicorp/local v2.4.1...
+- Installed hashicorp/local v2.4.1 (unauthenticated)
+- Installing hashicorp/template v2.2.0...
+- Installed hashicorp/template v2.2.0 (unauthenticated)
+- Installing yandex-cloud/yandex v0.109.0...
+- Installed yandex-cloud/yandex v0.109.0 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced
+│ to calculate lock file checksums locally for the following providers:
+│   - hashicorp/local
+│   - hashicorp/template
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for
+│ linux_amd64, so Terraform running on another platform will fail to install
+│ these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+$ terraform apply -auto-approve
+Acquiring state lock. This may take a few moments...
+data.template_file.cloudinit: Reading...
+data.template_file.cloudinit: Read complete after 0s [id=7dada99b1a5900b0a2447da452bf65e7ab31407994f179670fbb86b1b29b58eb]
+data.yandex_compute_image.vm-image: Reading...
+data.yandex_compute_image.vm-image: Read complete after 1s [id=fd8p3qkkviv008rkeb83]
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+Terraform will perform the following actions:
+  # local_file.ansible-inventory will be created
+  + resource "local_file" "ansible-inventory" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "../ansible-playbook/inventory/hosts.yml"
+      + id                   = (known after apply)
+    }
+  # local_file.local-address will be created
+  + resource "local_file" "local-address" {
+      + content              = (known after apply)
+      + content_base64sha256 = (known after apply)
+      + content_base64sha512 = (known after apply)
+      + content_md5          = (known after apply)
+      + content_sha1         = (known after apply)
+      + content_sha256       = (known after apply)
+      + content_sha512       = (known after apply)
+      + directory_permission = "0777"
+      + file_permission      = "0777"
+      + filename             = "../ansible-playbook/group_vars/all/local_ip.yml"
+      + id                   = (known after apply)
+    }
+  # yandex_compute_instance.kube-node["0"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-01"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-01"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_compute_instance.kube-node["1"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-02"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-02"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_compute_instance.kube-node["2"] will be created
+  + resource "yandex_compute_instance" "kube-node" {
+      + allow_stopping_for_update = true
+      + created_at                = (known after apply)
+      + folder_id                 = (known after apply)
+      + fqdn                      = (known after apply)
+      + gpu_cluster_id            = (known after apply)
+      + hostname                  = "k8s-node-03"
+      + id                        = (known after apply)
+      + maintenance_grace_period  = (known after apply)
+      + maintenance_policy        = (known after apply)
+      + metadata                  = {
+          + "serial-port-enable" = "1"
+          + "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        }
+      + name                      = "k8s-node-03"
+      + network_acceleration_type = "standard"
+      + platform_id               = "standard-v1"
+      + service_account_id        = (known after apply)
+      + status                    = (known after apply)
+      + zone                      = "[MASKED]"
+      + boot_disk {
+          + auto_delete = true
+          + device_name = (known after apply)
+          + disk_id     = (known after apply)
+          + mode        = (known after apply)
+          + initialize_params {
+              + block_size  = (known after apply)
+              + description = (known after apply)
+              + image_id    = "fd8p3qkkviv008rkeb83"
+              + name        = (known after apply)
+              + size        = 20
+              + snapshot_id = (known after apply)
+              + type        = "network-ssd"
+            }
+        }
+      + network_interface {
+          + index              = (known after apply)
+          + ip_address         = (known after apply)
+          + ipv4               = true
+          + ipv6               = (known after apply)
+          + ipv6_address       = (known after apply)
+          + mac_address        = (known after apply)
+          + nat                = true
+          + nat_ip_address     = (known after apply)
+          + nat_ip_version     = (known after apply)
+          + security_group_ids = (known after apply)
+          + subnet_id          = (known after apply)
+        }
+      + resources {
+          + core_fraction = 20
+          + cores         = 4
+          + memory        = 8
+        }
+      + scheduling_policy {
+          + preemptible = true
+        }
+    }
+  # yandex_vpc_network.cloud-network will be created
+  + resource "yandex_vpc_network" "cloud-network" {
+      + created_at                = (known after apply)
+      + default_security_group_id = (known after apply)
+      + folder_id                 = "[MASKED]"
+      + id                        = (known after apply)
+      + labels                    = (known after apply)
+      + name                      = "diplom-network"
+      + subnet_ids                = (known after apply)
+    }
+  # yandex_vpc_subnet.vpc-subnet will be created
+  + resource "yandex_vpc_subnet" "vpc-subnet" {
+      + created_at     = (known after apply)
+      + folder_id      = (known after apply)
+      + id             = (known after apply)
+      + labels         = (known after apply)
+      + name           = "public"
+      + network_id     = (known after apply)
+      + v4_cidr_blocks = [
+          + "192.168.10.0/24",
+        ]
+      + v6_cidr_blocks = (known after apply)
+      + zone           = "[MASKED]"
+    }
+Plan: 7 to add, 0 to change, 0 to destroy.
+yandex_vpc_network.cloud-network: Creating...
+yandex_vpc_network.cloud-network: Creation complete after 2s [id=enph65352fc72g18ggd0]
+yandex_vpc_subnet.vpc-subnet: Creating...
+yandex_vpc_subnet.vpc-subnet: Creation complete after 1s [id=e9bra3gbn4ns9382jqjt]
+yandex_compute_instance.kube-node["2"]: Creating...
+yandex_compute_instance.kube-node["0"]: Creating...
+yandex_compute_instance.kube-node["1"]: Creating...
+yandex_compute_instance.kube-node["2"]: Still creating... [10s elapsed]
+yandex_compute_instance.kube-node["0"]: Still creating... [10s elapsed]
+yandex_compute_instance.kube-node["1"]: Still creating... [10s elapsed]
+yandex_compute_instance.kube-node["2"]: Still creating... [20s elapsed]
+yandex_compute_instance.kube-node["0"]: Still creating... [20s elapsed]
+yandex_compute_instance.kube-node["1"]: Still creating... [20s elapsed]
+yandex_compute_instance.kube-node["2"]: Still creating... [30s elapsed]
+yandex_compute_instance.kube-node["0"]: Still creating... [30s elapsed]
+yandex_compute_instance.kube-node["1"]: Still creating... [30s elapsed]
+yandex_compute_instance.kube-node["2"]: Creation complete after 31s [id=fhmhbn3tavutt2hfm6e9]
+yandex_compute_instance.kube-node["0"]: Creation complete after 37s [id=fhmr2m68gf4h78v23369]
+yandex_compute_instance.kube-node["1"]: Creation complete after 39s [id=fhmpp0hq6h4tddr9p2a1]
+local_file.ansible-inventory: Creating...
+local_file.ansible-inventory: Creation complete after 0s [id=aba477228fa15c644ec0034aa077f36394b3d4dd]
+local_file.local-address: Creating...
+local_file.local-address: Creation complete after 0s [id=918dd28a099a23a1fb8985ba00a4a0b45182e8ea]
+Apply complete! Resources: 7 added, 0 changed, 0 destroyed.
+Cleaning up project directory and file based variables
+00:01
+Job succeeded
+```
+
+</details>
+
+<br />
+
+<details><summary><b>Job#4 - Destroy | Log</b></summary>
+
+```bash
+Running with gitlab-runner 16.9.0 (656c1943)
+  on ntlb-runner o3xFgXuYL, system ID: s_47241d5b23e7
+Resolving secrets
+00:00
+Preparing the "docker" executor
+00:04
+Using Docker executor with image hashicorp/terraform:latest ...
+Pulling docker image hashicorp/terraform:latest ...
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+Preparing environment
+00:01
+Running on runner-o3xfgxuyl-project-3-concurrent-0 via ntlb-runner...
+Getting source from Git repository
+00:01
+Fetching changes with git depth set to 20...
+Reinitialized existing Git repository in /builds/netology/yc-infrastructure/.git/
+Checking out 4610a5f8 as detached HEAD (ref is main)...
+Removing .terraform.lock.hcl
+Removing .terraform/
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+01:19
+Using docker image sha256:9eab78c4de8d127222eb63308df2fa65ba61e1b0cd82950b960a8b694146d956 for hashicorp/terraform:latest with digest hashicorp/terraform@sha256:432446e203a6aed6da5c8245544e87cbd77ffebc4a17e9fe8bb0d18fd9639191 ...
+$ export AWS_ACCESS_KEY_ID=${YC_ACCESS_KEY_ID}
+$ export AWS_SECRET_ACCESS_KEY=${YC_SECRET_ACCESS_KEY}
+$ cp .terraformrc /root/.terraformrc
+$ terraform --version
+Terraform v1.7.4
+on linux_amd64
+$ terraform init
+Initializing the backend...
+Successfully configured the backend "s3"! Terraform will automatically
+use this backend unless the backend configuration changes.
+Initializing provider plugins...
+- Finding latest version of hashicorp/template...
+- Finding latest version of yandex-cloud/yandex...
+- Finding latest version of hashicorp/local...
+- Installing hashicorp/template v2.2.0...
+- Installed hashicorp/template v2.2.0 (unauthenticated)
+- Installing yandex-cloud/yandex v0.109.0...
+- Installed yandex-cloud/yandex v0.109.0 (unauthenticated)
+- Installing hashicorp/local v2.4.1...
+- Installed hashicorp/local v2.4.1 (unauthenticated)
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+╷
+│ Warning: Incomplete lock file information for providers
+│ 
+│ Due to your customized provider installation methods, Terraform was forced
+│ to calculate lock file checksums locally for the following providers:
+│   - hashicorp/local
+│   - hashicorp/template
+│   - yandex-cloud/yandex
+│ 
+│ The current .terraform.lock.hcl file only includes checksums for
+│ linux_amd64, so Terraform running on another platform will fail to install
+│ these providers.
+│ 
+│ To calculate additional checksums for another platform, run:
+│   terraform providers lock -platform=linux_amd64
+│ (where linux_amd64 is the platform to generate)
+╵
+Terraform has been successfully initialized!
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+$ terraform destroy -auto-approve
+data.template_file.cloudinit: Reading...
+data.template_file.cloudinit: Read complete after 0s [id=7dada99b1a5900b0a2447da452bf65e7ab31407994f179670fbb86b1b29b58eb]
+data.yandex_compute_image.vm-image: Reading...
+yandex_vpc_network.cloud-network: Refreshing state... [id=enph65352fc72g18ggd0]
+data.yandex_compute_image.vm-image: Read complete after 2s [id=fd8p3qkkviv008rkeb83]
+yandex_vpc_subnet.vpc-subnet: Refreshing state... [id=e9bra3gbn4ns9382jqjt]
+yandex_compute_instance.kube-node["2"]: Refreshing state... [id=fhmhbn3tavutt2hfm6e9]
+yandex_compute_instance.kube-node["0"]: Refreshing state... [id=fhmr2m68gf4h78v23369]
+yandex_compute_instance.kube-node["1"]: Refreshing state... [id=fhmpp0hq6h4tddr9p2a1]
+local_file.local-address: Refreshing state... [id=918dd28a099a23a1fb8985ba00a4a0b45182e8ea]
+local_file.ansible-inventory: Refreshing state... [id=aba477228fa15c644ec0034aa077f36394b3d4dd]
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  - destroy
+Terraform will perform the following actions:
+  # local_file.ansible-inventory will be destroyed
+  - resource "local_file" "ansible-inventory" {
+      - content              = <<-EOT
+            ---
+            all:
+              hosts:
+                k8s-node-01:
+                  ansible_host: 158.160.111.108
+                k8s-node-02:
+                  ansible_host: 158.160.117.6
+                k8s-node-03:
+                  ansible_host: 158.160.127.181
+              vars:
+                ansible_user: admin
+        EOT -> null
+      - content_base64sha256 = "T7erBOw6NasGSfjYQZPzLqTaPRv92JB2TPm1q4toM8M=" -> null
+      - content_base64sha512 = "1NFuRctVYEI2AJDaYhku3ddr1ss6aWVCTVTM5NqgDfquTEGazCLr4ItSJSFflcZupb1CvuNfJh4gDYA6Zd8/Yg==" -> null
+      - content_md5          = "766a36fb9fbc49361e9080f84baed558" -> null
+      - content_sha1         = "aba477228fa15c644ec0034aa077f36394b3d4dd" -> null
+      - content_sha256       = "4fb7ab04ec3a35ab0649f8d84193f32ea4da3d1bfdd890764cf9b5ab8b6833c3" -> null
+      - content_sha512       = "d4d16e45cb556042360090da62192eddd76bd6cb3a6965424d54cce4daa00dfaae4c419acc22ebe08b5225215f95c66ea5bd42bee35f261e200d803a65df3f62" -> null
+      - directory_permission = "0777" -> null
+      - file_permission      = "0777" -> null
+      - filename             = "../ansible-playbook/inventory/hosts.yml" -> null
+      - id                   = "aba477228fa15c644ec0034aa077f36394b3d4dd" -> null
+    }
+  # local_file.local-address will be destroyed
+  - resource "local_file" "local-address" {
+      - content              = <<-EOT
+            ---
+            local_ip:
+              - 192.168.10.16  k8s-node-01
+              - 192.168.10.10  k8s-node-02
+              - 192.168.10.32  k8s-node-03
+        EOT -> null
+      - content_base64sha256 = "PQfyRRt3fVvE0RdE5mLvCd+u2tt4mEmvV+g4LAts+4w=" -> null
+      - content_base64sha512 = "gIeomKzxANA1sV93Kuy0AmqPdoaGk9+dMrpd+TMB4bDka0MYjLIlvHdKCL6eM7df7mTIxR2BnOgwlxc0Dn/kTA==" -> null
+      - content_md5          = "a04b463efd9ee15b2e4b624b3e53d72f" -> null
+      - content_sha1         = "918dd28a099a23a1fb8985ba00a4a0b45182e8ea" -> null
+      - content_sha256       = "3d07f2451b777d5bc4d11744e662ef09dfaedadb789849af57e8382c0b6cfb8c" -> null
+      - content_sha512       = "8087a898acf100d035b15f772aecb4026a8f76868693df9d32ba5df93301e1b0e46b43188cb225bc774a08be9e33b75fee64c8c51d819ce8309717340e7fe44c" -> null
+      - directory_permission = "0777" -> null
+      - file_permission      = "0777" -> null
+      - filename             = "../ansible-playbook/group_vars/all/local_ip.yml" -> null
+      - id                   = "918dd28a099a23a1fb8985ba00a4a0b45182e8ea" -> null
+    }
+  # yandex_compute_instance.kube-node["0"] will be destroyed
+  - resource "yandex_compute_instance" "kube-node" {
+      - allow_stopping_for_update = true -> null
+      - created_at                = "2024-03-01T06:49:41Z" -> null
+      - folder_id                 = "[MASKED]" -> null
+      - fqdn                      = "k8s-node-01.ru-central1.internal" -> null
+      - hostname                  = "k8s-node-01" -> null
+      - id                        = "fhmr2m68gf4h78v23369" -> null
+      - labels                    = {} -> null
+      - metadata                  = {
+          - "serial-port-enable" = "1"
+          - "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        } -> null
+      - name                      = "k8s-node-01" -> null
+      - network_acceleration_type = "standard" -> null
+      - platform_id               = "standard-v1" -> null
+      - status                    = "running" -> null
+      - zone                      = "[MASKED]" -> null
+      - boot_disk {
+          - auto_delete = true -> null
+          - device_name = "fhmk5lakvk3v9s36qldi" -> null
+          - disk_id     = "fhmk5lakvk3v9s36qldi" -> null
+          - mode        = "READ_WRITE" -> null
+          - initialize_params {
+              - block_size = 4096 -> null
+              - image_id   = "fd8p3qkkviv008rkeb83" -> null
+              - size       = 20 -> null
+              - type       = "network-ssd" -> null
+            }
+        }
+      - metadata_options {
+          - aws_v1_http_endpoint = 1 -> null
+          - aws_v1_http_token    = 2 -> null
+          - gce_http_endpoint    = 1 -> null
+          - gce_http_token       = 1 -> null
+        }
+      - network_interface {
+          - index              = 0 -> null
+          - ip_address         = "192.168.10.16" -> null
+          - ipv4               = true -> null
+          - ipv6               = false -> null
+          - mac_address        = "d0:0d:1b:15:8c:88" -> null
+          - nat                = true -> null
+          - nat_ip_address     = "158.160.111.108" -> null
+          - nat_ip_version     = "IPV4" -> null
+          - security_group_ids = [] -> null
+          - subnet_id          = "e9bra3gbn4ns9382jqjt" -> null
+        }
+      - placement_policy {
+          - host_affinity_rules       = [] -> null
+          - placement_group_partition = 0 -> null
+        }
+      - resources {
+          - core_fraction = 20 -> null
+          - cores         = 4 -> null
+          - gpus          = 0 -> null
+          - memory        = 8 -> null
+        }
+      - scheduling_policy {
+          - preemptible = true -> null
+        }
+    }
+  # yandex_compute_instance.kube-node["1"] will be destroyed
+  - resource "yandex_compute_instance" "kube-node" {
+      - allow_stopping_for_update = true -> null
+      - created_at                = "2024-03-01T06:49:41Z" -> null
+      - folder_id                 = "[MASKED]" -> null
+      - fqdn                      = "k8s-node-02.ru-central1.internal" -> null
+      - hostname                  = "k8s-node-02" -> null
+      - id                        = "fhmpp0hq6h4tddr9p2a1" -> null
+      - labels                    = {} -> null
+      - metadata                  = {
+          - "serial-port-enable" = "1"
+          - "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        } -> null
+      - name                      = "k8s-node-02" -> null
+      - network_acceleration_type = "standard" -> null
+      - platform_id               = "standard-v1" -> null
+      - status                    = "running" -> null
+      - zone                      = "[MASKED]" -> null
+      - boot_disk {
+          - auto_delete = true -> null
+          - device_name = "fhmpovq72odfk3t45a4j" -> null
+          - disk_id     = "fhmpovq72odfk3t45a4j" -> null
+          - mode        = "READ_WRITE" -> null
+          - initialize_params {
+              - block_size = 4096 -> null
+              - image_id   = "fd8p3qkkviv008rkeb83" -> null
+              - size       = 20 -> null
+              - type       = "network-ssd" -> null
+            }
+        }
+      - metadata_options {
+          - aws_v1_http_endpoint = 1 -> null
+          - aws_v1_http_token    = 2 -> null
+          - gce_http_endpoint    = 1 -> null
+          - gce_http_token       = 1 -> null
+        }
+      - network_interface {
+          - index              = 0 -> null
+          - ip_address         = "192.168.10.10" -> null
+          - ipv4               = true -> null
+          - ipv6               = false -> null
+          - mac_address        = "d0:0d:19:c8:23:a3" -> null
+          - nat                = true -> null
+          - nat_ip_address     = "158.160.117.6" -> null
+          - nat_ip_version     = "IPV4" -> null
+          - security_group_ids = [] -> null
+          - subnet_id          = "e9bra3gbn4ns9382jqjt" -> null
+        }
+      - placement_policy {
+          - host_affinity_rules       = [] -> null
+          - placement_group_partition = 0 -> null
+        }
+      - resources {
+          - core_fraction = 20 -> null
+          - cores         = 4 -> null
+          - gpus          = 0 -> null
+          - memory        = 8 -> null
+        }
+      - scheduling_policy {
+          - preemptible = true -> null
+        }
+    }
+  # yandex_compute_instance.kube-node["2"] will be destroyed
+  - resource "yandex_compute_instance" "kube-node" {
+      - allow_stopping_for_update = true -> null
+      - created_at                = "2024-03-01T06:49:41Z" -> null
+      - folder_id                 = "[MASKED]" -> null
+      - fqdn                      = "k8s-node-03.ru-central1.internal" -> null
+      - hostname                  = "k8s-node-03" -> null
+      - id                        = "fhmhbn3tavutt2hfm6e9" -> null
+      - labels                    = {} -> null
+      - metadata                  = {
+          - "serial-port-enable" = "1"
+          - "user-data"          = <<-EOT
+                #cloud-config
+                
+                users:
+                  - name: admin
+                    sudo: ALL=(ALL) NOPASSWD:ALL
+                    shell: /bin/bash
+                    groups: sudo
+                    lock_passwd: false
+                    # password - netology-diplom
+                    passwd: $6$rounds=4096$MO/C34ZjgPaA44/M$KCt8tGEsbTomnLx6/W9KlR55JJo0Bhn5aLtzse3fa5UVvFhmo4C6wzitdPRv10rtWBY0yL/zZXQqKJhMMFpEs/
+                    ssh_authorized_keys:
+                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILJpYQT/m1O5e6S0I3H/lGHgzN/JYD2DzLksszQ4/GxD rodney@arch-home
+                
+                package_update: true
+                package_upgrade: false
+                packages:
+                  - vim
+                  - yum-utils
+                  - curl
+                  - git
+                  - wget
+            EOT
+        } -> null
+      - name                      = "k8s-node-03" -> null
+      - network_acceleration_type = "standard" -> null
+      - platform_id               = "standard-v1" -> null
+      - status                    = "running" -> null
+      - zone                      = "[MASKED]" -> null
+      - boot_disk {
+          - auto_delete = true -> null
+          - device_name = "fhmaacqtqbiptq7h747p" -> null
+          - disk_id     = "fhmaacqtqbiptq7h747p" -> null
+          - mode        = "READ_WRITE" -> null
+          - initialize_params {
+              - block_size = 4096 -> null
+              - image_id   = "fd8p3qkkviv008rkeb83" -> null
+              - size       = 20 -> null
+              - type       = "network-ssd" -> null
+            }
+        }
+      - metadata_options {
+          - aws_v1_http_endpoint = 1 -> null
+          - aws_v1_http_token    = 2 -> null
+          - gce_http_endpoint    = 1 -> null
+          - gce_http_token       = 1 -> null
+        }
+      - network_interface {
+          - index              = 0 -> null
+          - ip_address         = "192.168.10.32" -> null
+          - ipv4               = true -> null
+          - ipv6               = false -> null
+          - mac_address        = "d0:0d:11:5d:c7:d5" -> null
+          - nat                = true -> null
+          - nat_ip_address     = "158.160.127.181" -> null
+          - nat_ip_version     = "IPV4" -> null
+          - security_group_ids = [] -> null
+          - subnet_id          = "e9bra3gbn4ns9382jqjt" -> null
+        }
+      - placement_policy {
+          - host_affinity_rules       = [] -> null
+          - placement_group_partition = 0 -> null
+        }
+      - resources {
+          - core_fraction = 20 -> null
+          - cores         = 4 -> null
+          - gpus          = 0 -> null
+          - memory        = 8 -> null
+        }
+      - scheduling_policy {
+          - preemptible = true -> null
+        }
+    }
+  # yandex_vpc_network.cloud-network will be destroyed
+  - resource "yandex_vpc_network" "cloud-network" {
+      - created_at                = "2024-03-01T06:49:38Z" -> null
+      - default_security_group_id = "enp5r3bcv9tunql8mlj7" -> null
+      - folder_id                 = "[MASKED]" -> null
+      - id                        = "enph65352fc72g18ggd0" -> null
+      - labels                    = {} -> null
+      - name                      = "diplom-network" -> null
+      - subnet_ids                = [
+          - "e9bra3gbn4ns9382jqjt",
+        ] -> null
+    }
+  # yandex_vpc_subnet.vpc-subnet will be destroyed
+  - resource "yandex_vpc_subnet" "vpc-subnet" {
+      - created_at     = "2024-03-01T06:49:40Z" -> null
+      - folder_id      = "[MASKED]" -> null
+      - id             = "e9bra3gbn4ns9382jqjt" -> null
+      - labels         = {} -> null
+      - name           = "public" -> null
+      - network_id     = "enph65352fc72g18ggd0" -> null
+      - v4_cidr_blocks = [
+          - "192.168.10.0/24",
+        ] -> null
+      - v6_cidr_blocks = [] -> null
+      - zone           = "[MASKED]" -> null
+    }
+Plan: 0 to add, 0 to change, 7 to destroy.
+local_file.ansible-inventory: Destroying... [id=aba477228fa15c644ec0034aa077f36394b3d4dd]
+local_file.local-address: Destroying... [id=918dd28a099a23a1fb8985ba00a4a0b45182e8ea]
+local_file.ansible-inventory: Destruction complete after 0s
+local_file.local-address: Destruction complete after 0s
+yandex_compute_instance.kube-node["1"]: Destroying... [id=fhmpp0hq6h4tddr9p2a1]
+yandex_compute_instance.kube-node["2"]: Destroying... [id=fhmhbn3tavutt2hfm6e9]
+yandex_compute_instance.kube-node["0"]: Destroying... [id=fhmr2m68gf4h78v23369]
+yandex_compute_instance.kube-node["1"]: Still destroying... [id=fhmpp0hq6h4tddr9p2a1, 10s elapsed]
+yandex_compute_instance.kube-node["2"]: Still destroying... [id=fhmhbn3tavutt2hfm6e9, 10s elapsed]
+yandex_compute_instance.kube-node["0"]: Still destroying... [id=fhmr2m68gf4h78v23369, 10s elapsed]
+yandex_compute_instance.kube-node["2"]: Still destroying... [id=fhmhbn3tavutt2hfm6e9, 20s elapsed]
+yandex_compute_instance.kube-node["1"]: Still destroying... [id=fhmpp0hq6h4tddr9p2a1, 20s elapsed]
+yandex_compute_instance.kube-node["0"]: Still destroying... [id=fhmr2m68gf4h78v23369, 20s elapsed]
+yandex_compute_instance.kube-node["1"]: Still destroying... [id=fhmpp0hq6h4tddr9p2a1, 30s elapsed]
+yandex_compute_instance.kube-node["2"]: Still destroying... [id=fhmhbn3tavutt2hfm6e9, 30s elapsed]
+yandex_compute_instance.kube-node["0"]: Still destroying... [id=fhmr2m68gf4h78v23369, 30s elapsed]
+yandex_compute_instance.kube-node["2"]: Still destroying... [id=fhmhbn3tavutt2hfm6e9, 40s elapsed]
+yandex_compute_instance.kube-node["1"]: Still destroying... [id=fhmpp0hq6h4tddr9p2a1, 40s elapsed]
+yandex_compute_instance.kube-node["0"]: Still destroying... [id=fhmr2m68gf4h78v23369, 40s elapsed]
+yandex_compute_instance.kube-node["2"]: Destruction complete after 41s
+yandex_compute_instance.kube-node["0"]: Destruction complete after 47s
+yandex_compute_instance.kube-node["1"]: Destruction complete after 47s
+yandex_vpc_subnet.vpc-subnet: Destroying... [id=e9bra3gbn4ns9382jqjt]
+yandex_vpc_subnet.vpc-subnet: Destruction complete after 4s
+yandex_vpc_network.cloud-network: Destroying... [id=enph65352fc72g18ggd0]
+yandex_vpc_network.cloud-network: Destruction complete after 2s
+Destroy complete! Resources: 7 destroyed.
+Cleaning up project directory and file based variables
+00:01
+Job succeeded
+```
+
+</details>
+
+<br />
+
+В данном Pipeline этапы `Validate` и `Plan` - запускаются автоматически сразу же после коммита в main-ветку репозитория, этапы `Aplly` и `Destroy` - в рамках Pipeline запускаются вручную после оценки результатов работы двух предыдущих этапов. 
