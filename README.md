@@ -60,7 +60,7 @@
 
 Манифест `provider.tf` описывает параметры провайдера, также здесь описано какой backend использовать для хранения tfstate файла и каким образом осуществлять его блокировку.
 
-<details><summary>provider.tf</summary>
+<details><summary><b>provider.tf</b></summary>
 
 ```terraform
 terraform {
@@ -102,7 +102,7 @@ provider "yandex" {
 
 Для дипломного проекта я создал отдельную vpc с отдельной подсетью, для этого используется манифест `vpc.tf`
 
-<details><summary>vpc.tf</summary>
+<details><summary><b>vpc.tf</b></summary>
 
 ```terraform
 resource "yandex_vpc_network" "cloud-network" {
@@ -125,7 +125,7 @@ resource "yandex_vpc_subnet" "vpc-subnet" {
 
 Манифест `instances.tf` динамически создает заданное количество нод будущего кластера. С помощью конструкции `for_each` можно создать как одну машину, так и 10, и больше.
 
-<details><summary>instances.tf</summary>
+<details><summary><b>instances.tf</b></summary>
 
 ```terraform
 resource "yandex_compute_instance" "kube-node" {
@@ -174,7 +174,7 @@ resource "yandex_compute_instance" "kube-node" {
 
 Базовая конфигурация машин осуществляется с помощью `cloud-config` файла, в котором задается имя пользователя по умолчанию, хеш его пароля, добавляется публичная часть ssh-ключа, а также задаются пакеты, которые должны быть установлены на этапе конфигурирования машин. Синтаксис файла ниже.
 
-<details><summary>cloud-init.yml</summary>
+<details><summary><b>cloud-init.yml</b></summary>
 
 ```yml
 #cloud-config
@@ -205,7 +205,7 @@ packages:
 
 Манифест `data.tf` содержит набор датасурсов, используемых в проекте. Тут указано какой образ использовать для создания виртуальных машин, а также какой ssh-ключ брать и откуда. Прятать публичную часть ключа за переменные или Vault не вижу особого смысла, публичная часть она на то и публичная, чтобы предоставить ее куда-либо, без компрометации приватной части ключа.
 
-<details><summary>data.tf</summary>
+<details><summary><b>data.tf</b></summary>
 
 ```terraform
 data "yandex_compute_image" "vm-image" {
@@ -227,7 +227,7 @@ data "template_file" "cloudinit" {
 
 Ну а манифест `main.tf` позволяет динамически создавать файл inventory для Ansible, а так же файл group_vars, содержащий локальные адреса нод будущего кластера.
 
-<details><summary>main.tf</summary>
+<details><summary><b>main.tf</b></summary>
 
 ```terraform
 resource "local_file" "ansible-inventory" {
@@ -1416,7 +1416,7 @@ Destroy complete! Resources: 7 destroyed.
 
 По факту готовности виртуальных машин в облаке можно запустить выполнение Playbook командой `ansible-playbook -i ./inventory/hosts.yml main.yml`. Результат выполнения Playbook будет ниже.
 
-<details><summary>Результат выполнения Playbook</summary>
+<details><summary><b>Результат выполнения Playbook</b></summary>
 
 ```bash
 rodney@arch-home: /home/rodney/learning/kirill-shapovalov-netologydiplom/ansible-playbook git:(main) ✗ 
@@ -1651,7 +1651,7 @@ CMD ["gunicorn", "-c", "gunicorn.py", "webapp.wsgi:application"]
 
 Можно переходить к сборке образа моего приложения.
 
-<details><summary>Сборка Docker Image</summary>
+<details><summary><b>Сборка Docker Image</b></summary>
 
 ```bash
 rodney@arch-home: /home/rodney/learning/kirill-shapovalov-netologydiplom/diplom-app git:(main) ✗ 
@@ -1823,7 +1823,7 @@ Successfully tagged diplom-app:latest
 
 Для деплоя написал манифест <a href="./kubernetes/deployment.yaml">deployment.yaml</a>, который описывает создание namespace, deployment и service.
 
-<details><summary>Манифест</summary>
+<details><summary><b>Манифест</b></summary>
 
 ```yaml
 apiVersion: v1
