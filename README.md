@@ -3399,4 +3399,388 @@ Job succeeded
 
 <br />
 
-В данном Pipeline этапы `Validate` и `Plan` - запускаются автоматически сразу же после коммита в main-ветку репозитория, этапы `Aplly` и `Destroy` - в рамках Pipeline запускаются вручную после оценки результатов работы двух предыдущих этапов. 
+В данном Pipeline этапы `Validate` и `Plan` - запускаются автоматически сразу же после коммита в main-ветку репозитория, этапы `Aplly` и `Destroy` - в рамках Pipeline запускаются вручную после оценки результатов работы двух предыдущих этапов.
+
+Для сборки и деплоя приложения разверну Gitlab Runner в кластере Kubernetes с использованием Helm.
+
+Самое главное в данном случае - создать секрет для подготовки раннера, который будет содержать токен для регистрации в самом Gitlab, а так же отредактировать файл `values.yml` в соответствии со своими нуждами.
+
+Файлы `secret.yml` и `values.yml` находятся в каталоге <a href="./kubernetes/gitlab-runner/">kubernetes/gitlab-runner</a>
+
+Применяю манифест с созданием секрета:
+
+<img src="./images/29-apply-secret.png" width="800px" height="auto" />
+
+Необходимо добавить Helm репозиторий.
+
+<img src="./images/30-add-helm-repo.png" width="800px" height="auto" />
+
+Теперь можно задеплоить сам раннер.
+
+<img src="./images/31-install-runner.png" width="800px" height="auto" />
+
+Раннер установлен, проверю в Gitlab.
+
+<img src="./images/32-runner-in-gitlab.png" width="800px" height="auto" />
+
+Раннер появился и доступен для выполнения назначенных заданий.
+
+Следующая задача - осуществить сборку и деплой приложения. Необходимо написать CI-манифест, который будет данную задачу решать. 
+
+Манифест в данном случае будет состоять из двух шагов - сборка и деплой. Так как раннер работает в кластере Kubernetes для сборки образа в непривилегированном режиме буду использовать образ от проекта kaniko. 
+
+Стадия сборки:
+
+```yaml
+build:
+  stage: build
+  image: gcr.io/kaniko-project/executor:debug
+  tags:
+    - kube-runneer
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auth\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${CI_REGISTRY}/${CI_PROJECT_PATH}/diplom-app:${CI_COMMIT_TAG}"
+  only:
+    - tags
+```
+
+На данном этапе осуществляется сборка Docker Image с помощью сборщика Kaniko, который сохранит мой образ в локальном Container Registry Gitlab. Сборка будет осуществляться только по тегу.
+
+Чтобы стадия деплоя успешно завершилась - Kubernetes кластер должен зарегистрироваться в Gitlab. Сделать это можно либо через Gitlab-Agent либо через Service-Account Token. Я выбрал второй путь.
+
+Для начала взял манифест для создания сервисного аккаунта, секрета для него и назначения роли кластер-админа. Не вижу смысла приводить листинг манифеста, ведь это стандартный Yandex.Cloud манифест, указанный в официальной документации.
+
+Применил манифест:
+
+<img src="./images/35-apply-sa.png" width="800px" height="auto" />
+
+Получаю токен для созданного сервис-аккаунта, его же нужно будет добавить в Gitlab CI/CD Variables моего проекта:
+
+<img src="./images/36-get-sa-token.png" width="800px" height="auto" />
+
+В итоге стадия деплоя будет выглядеть следующим образом:
+
+```yaml
+deploy:
+  stage: deploy
+  image: gcr.io/cloud-builders/kubectl:latest
+  tags:
+    - kube-runner
+  script:
+    - kubectl config set-cluster kubernetes --server="$KUBE_URL" --insecure-skip-tls-verify=true
+    - kubectl config set-credentials admin --token="$KUBE_TOKEN"
+    - kubectl config set-context default --cluster=kubernetes --user=admin
+    - kubectl config use-context default
+    - kubectl cluster-info
+    - sed -i "s,__IMAGE__,${CI_REGISTRY}/${CI_PROJECT_PATH}/diplom-app:${CI_COMMIT_TAG}," deployment.yaml
+    - kubectl apply -f deployment.yaml
+  only:
+    - tags
+```
+
+
+Для начала проверяю, появился ли вообще образ в registry.
+
+<img src="./images/33-container-registry.png" width="800px" height="auto" />
+
+Отлично, образ появился. Теперь проверю Pipeline.
+
+<img src="./images/34-pipeline.png" width="800px" height="auto" />
+
+Gitlab говорит, что обе стадии завершены успешно.
+
+<details><summary><b>Job#1 - build | Log</b></sumary>
+
+```bash
+Running with gitlab-runner 16.9.1 (782c6ecb)
+  on gitlab-runner-6b496559d9-q8bjv ABmkAsFMQ, system ID: r_9ad0UXVX7q4q
+Resolving secrets
+00:00
+Preparing the "kubernetes" executor
+00:00
+Using Kubernetes namespace: gitlab-runner
+Using Kubernetes executor with image gcr.io/kaniko-project/executor:debug ...
+Using attach strategy to execute scripts...
+Preparing environment
+00:10
+Using FF_USE_POD_ACTIVE_DEADLINE_SECONDS, the Pod activeDeadlineSeconds will be set to the job timeout: 1h0m0s...
+Waiting for pod gitlab-runner/runner-abmkasfmq-project-5-concurrent-0-96mel8dg to be running, status is Pending
+Waiting for pod gitlab-runner/runner-abmkasfmq-project-5-concurrent-0-96mel8dg to be running, status is Pending
+	ContainersNotReady: "containers with unready status: [build helper]"
+	ContainersNotReady: "containers with unready status: [build helper]"
+Waiting for pod gitlab-runner/runner-abmkasfmq-project-5-concurrent-0-96mel8dg to be running, status is Pending
+	ContainersNotReady: "containers with unready status: [build helper]"
+	ContainersNotReady: "containers with unready status: [build helper]"
+Running on runner-abmkasfmq-project-5-concurrent-0-96mel8dg via gitlab-runner-6b496559d9-q8bjv...
+Getting source from Git repository
+00:04
+Fetching changes with git depth set to 20...
+Initialized empty Git repository in /builds/netology/diplom-application/.git/
+Created fresh repository.
+Checking out 7afa956c as detached HEAD (ref is 1.0.2)...
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+02:38
+$ mkdir -p /kaniko/.docker
+$ echo "{\"auth\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+$ /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${CI_REGISTRY}/${CI_PROJECT_PATH}/diplom-app:${CI_COMMIT_TAG}"
+INFO[0000] Retrieving image manifest python:3.9.18      
+INFO[0000] Retrieving image python:3.9.18 from registry index.docker.io 
+INFO[0002] Built cross stage deps: map[]                
+INFO[0002] Retrieving image manifest python:3.9.18      
+INFO[0002] Returning cached image manifest              
+INFO[0002] Executing 0 build triggers                   
+INFO[0002] Building stage 'python:3.9.18' [idx: '0', base-idx: '-1'] 
+INFO[0002] Unpacking rootfs as cmd RUN pip install --no-cache-dir --upgrade pip requires it. 
+INFO[0032] ENV PYTHONUNBUFFERED=1                       
+INFO[0032] ENV PYTHONDONTWRITEBYTECODE 1                
+INFO[0032] RUN pip install --no-cache-dir --upgrade pip 
+INFO[0032] Initializing snapshotter ...                 
+INFO[0032] Taking snapshot of full filesystem...        
+INFO[0116] Cmd: /bin/sh                                 
+INFO[0116] Args: [-c pip install --no-cache-dir --upgrade pip] 
+INFO[0116] Running: [/bin/sh -c pip install --no-cache-dir --upgrade pip] 
+Requirement already satisfied: pip in /usr/local/lib/python3.9/site-packages (23.0.1)
+Collecting pip
+  Downloading pip-24.0-py3-none-any.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 18.5 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 23.0.1
+    Uninstalling pip-23.0.1:
+      Successfully uninstalled pip-23.0.1
+Successfully installed pip-24.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+INFO[0122] Taking snapshot of full filesystem...        
+INFO[0125] COPY requirements.txt .                      
+INFO[0125] Taking snapshot of files...                  
+INFO[0125] RUN pip install --no-cache-dir -r requirements.txt 
+INFO[0125] Cmd: /bin/sh                                 
+INFO[0125] Args: [-c pip install --no-cache-dir -r requirements.txt] 
+INFO[0125] Running: [/bin/sh -c pip install --no-cache-dir -r requirements.txt] 
+Collecting django==4.2.7 (from -r requirements.txt (line 1))
+  Downloading Django-4.2.7-py3-none-any.whl.metadata (4.1 kB)
+Collecting gunicorn (from -r requirements.txt (line 2))
+  Downloading gunicorn-21.2.0-py3-none-any.whl.metadata (4.1 kB)
+Collecting requests (from -r requirements.txt (line 3))
+  Downloading requests-2.31.0-py3-none-any.whl.metadata (4.6 kB)
+Collecting asgiref<4,>=3.6.0 (from django==4.2.7->-r requirements.txt (line 1))
+  Downloading asgiref-3.7.2-py3-none-any.whl.metadata (9.2 kB)
+Collecting sqlparse>=0.3.1 (from django==4.2.7->-r requirements.txt (line 1))
+  Downloading sqlparse-0.4.4-py3-none-any.whl.metadata (4.0 kB)
+Collecting packaging (from gunicorn->-r requirements.txt (line 2))
+  Downloading packaging-23.2-py3-none-any.whl.metadata (3.2 kB)
+Collecting charset-normalizer<4,>=2 (from requests->-r requirements.txt (line 3))
+  Downloading charset_normalizer-3.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (33 kB)
+Collecting idna<4,>=2.5 (from requests->-r requirements.txt (line 3))
+  Downloading idna-3.6-py3-none-any.whl.metadata (9.9 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->-r requirements.txt (line 3))
+  Downloading urllib3-2.2.1-py3-none-any.whl.metadata (6.4 kB)
+Collecting certifi>=2017.4.17 (from requests->-r requirements.txt (line 3))
+  Downloading certifi-2024.2.2-py3-none-any.whl.metadata (2.2 kB)
+Collecting typing-extensions>=4 (from asgiref<4,>=3.6.0->django==4.2.7->-r requirements.txt (line 1))
+  Downloading typing_extensions-4.10.0-py3-none-any.whl.metadata (3.0 kB)
+Downloading Django-4.2.7-py3-none-any.whl (8.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.0/8.0 MB 52.2 MB/s eta 0:00:00
+Downloading gunicorn-21.2.0-py3-none-any.whl (80 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.2/80.2 kB 146.0 MB/s eta 0:00:00
+Downloading requests-2.31.0-py3-none-any.whl (62 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.6/62.6 kB 119.0 MB/s eta 0:00:00
+Downloading asgiref-3.7.2-py3-none-any.whl (24 kB)
+Downloading certifi-2024.2.2-py3-none-any.whl (163 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 163.8/163.8 kB 123.6 MB/s eta 0:00:00
+Downloading charset_normalizer-3.3.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (142 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 142.3/142.3 kB 147.4 MB/s eta 0:00:00
+Downloading idna-3.6-py3-none-any.whl (61 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.6/61.6 kB 111.4 MB/s eta 0:00:00
+Downloading sqlparse-0.4.4-py3-none-any.whl (41 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 41.2/41.2 kB 93.7 MB/s eta 0:00:00
+Downloading urllib3-2.2.1-py3-none-any.whl (121 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 121.1/121.1 kB 138.9 MB/s eta 0:00:00
+Downloading packaging-23.2-py3-none-any.whl (53 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 53.0/53.0 kB 104.1 MB/s eta 0:00:00
+Downloading typing_extensions-4.10.0-py3-none-any.whl (33 kB)
+Installing collected packages: urllib3, typing-extensions, sqlparse, packaging, idna, charset-normalizer, certifi, requests, gunicorn, asgiref, django
+Successfully installed asgiref-3.7.2 certifi-2024.2.2 charset-normalizer-3.3.2 django-4.2.7 gunicorn-21.2.0 idna-3.6 packaging-23.2 requests-2.31.0 sqlparse-0.4.4 typing-extensions-4.10.0 urllib3-2.2.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+INFO[0135] Taking snapshot of full filesystem...        
+INFO[0147] COPY webapp /webapp                          
+INFO[0147] Taking snapshot of files...                  
+INFO[0147] RUN chmod -R 777 /webapp                     
+INFO[0147] Cmd: /bin/sh                                 
+INFO[0147] Args: [-c chmod -R 777 /webapp]              
+INFO[0147] Running: [/bin/sh -c chmod -R 777 /webapp]   
+INFO[0147] Taking snapshot of full filesystem...        
+INFO[0151] WORKDIR /webapp                              
+INFO[0151] Cmd: workdir                                 
+INFO[0151] Changed working directory to /webapp         
+INFO[0151] No files changed in this command, skipping snapshotting. 
+INFO[0151] EXPOSE 8000                                  
+INFO[0151] Cmd: EXPOSE                                  
+INFO[0151] Adding exposed port: 8000/tcp                
+INFO[0151] CMD ["gunicorn", "-c", "gunicorn.py", "webapp.wsgi:application"] 
+INFO[0151] Pushing image to registry.ntlb.ru/netology/diplom-application/diplom-app:1.0.2 
+INFO[0156] Pushed registry.ntlb.ru/netology/diplom-application/diplom-app@sha256:d7ab16b6b3b8e431f742b57f30fcee8bda8e33c232fbc226ec5503dc0923cd3b 
+Cleaning up project directory and file based variables
+00:00
+Job succeeded
+```
+
+</details>
+
+<br />
+
+<details><summary><b>Job#2 - deploy | Log</b></sumary>
+
+```bash
+Running with gitlab-runner 16.9.1 (782c6ecb)
+  on gitlab-runner-6b496559d9-jtf4t yTZW64zdN, system ID: r_5L3h7xoY5FNo
+Resolving secrets
+00:00
+Preparing the "kubernetes" executor
+00:00
+Using Kubernetes namespace: gitlab-runner
+Using Kubernetes executor with image gcr.io/cloud-builders/kubectl:latest ...
+Using attach strategy to execute scripts...
+Preparing environment
+00:04
+Using FF_USE_POD_ACTIVE_DEADLINE_SECONDS, the Pod activeDeadlineSeconds will be set to the job timeout: 1h0m0s...
+Waiting for pod gitlab-runner/runner-ytzw64zdn-project-5-concurrent-0-hn69k0wb to be running, status is Pending
+Running on runner-ytzw64zdn-project-5-concurrent-0-hn69k0wb via gitlab-runner-6b496559d9-jtf4t...
+Getting source from Git repository
+00:03
+Fetching changes with git depth set to 20...
+Initialized empty Git repository in /builds/netology/diplom-application/.git/
+Created fresh repository.
+Checking out cddd32f5 as detached HEAD (ref is 1.0.4)...
+Skipping Git submodules setup
+Executing "step_script" stage of the job script
+00:04
+$ kubectl config set-cluster kubernetes --server="$KUBE_URL" --insecure-skip-tls-verify=true
+Cluster "kubernetes" set.
+$ kubectl config set-credentials admin --token="$KUBE_TOKEN"
+User "admin" set.
+$ kubectl config set-context default --cluster=kubernetes --user=admin
+Context "default" created.
+$ kubectl config use-context default
+Switched to context "default".
+$ kubectl cluster-info
+Kubernetes control plane is running at [MASKED]
+CoreDNS is running at [MASKED]/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+$ sed -i "s,__IMAGE__,${CI_REGISTRY}/${CI_PROJECT_PATH}/diplom-app:${CI_COMMIT_TAG}," deployment.yaml
+$ kubectl apply -f deployment.yaml
+namespace/diplom-app created
+deployment.apps/diplom-app-deployment created
+service/diplom-app-svc created
+ingress.networking.k8s.io/diplom-ingress-app created
+Cleaning up project directory and file based variables
+00:00
+Job succeeded
+```
+
+</details>
+
+Вроде бы обе стадии отработали корректно, образ в локальный Container Registry сохраняется, но все мои надежды были сломаны, когда я полез проверять. Все три реплики подов моего приложения находятся в ошибке `ImagePullBackOff`.
+
+Тут как раз пригодились знания дебага Kubernetes. Сделав `describe pod`, я получил текст ошибки:
+
+```bash
+Failed to pull image "registry.ntlb.ru/netology/diplom-application/diplom-app:1.0.4": 
+failed to pull and unpack image "registry.ntlb.ru/netology/diplom-application/diplom-app:1.0.4": 
+failed to resolve reference "registry.ntlb.ru/netology/diplom-application/diplom-app:1.0.4": 
+failed to authorize: failed to fetch anonymous token: unexpected status from GET request 
+to https://gitlab.ntlb.ru/jwt/auth?scope=repository%3Anetology%2Fdiplom-application%2Fdiplom-app%3Apull&service=container_registry: 403 Forbidden
+```
+
+`Stackoverflow` мне в данном случае подсказал, что нужно выпустить `Deploy Token` в самом Gitlab, а в Kubernetes кластере создать Secret с параметрами токена. Приступим.
+
+Создал токен с правами на чтение репозитория и container registry (показывать открыто токен я не боюсь ибо, во-первых, у него права только на чтение, во-вторых, у него установлен срок действия в 5 дней):
+
+<img src="./images/37-deploy-token.png" width="800px" height="auto" />
+
+Создал новый секрет:
+
+<img src="./images/38-reg-secret.png" width="800px" height="auto" />
+
+Видимых результатов это не принесло. Пробовал потом переделать секрет в разные неймспейсы, хотя по Stackoverflow - секрет должен быть в том же неймспейсе, где и приложение, итог один - поды не поднимаются, ошибка та же самая.
+
+<img src="./images/39-fail.png" width="800px" height="auto" />
+
+Признаю, что это факап, видимо что-то не то с моим гитлабом, возможно мешает Nginx Proxy manager, но по итогу перенесу пуш докер образа в публичный DockerHub и оттуда же буду его забирать.
+
+Итоговый файл `.gitlab-ci.yml` для репозитория в докерхабе будет выглядеть так:
+
+```yml
+stages:
+  - build
+  - deploy
+
+variables:
+  CI_REGISTRY: "https://index.docker.io/v1/"
+  IMAGE_PATH: "r0dney/diplom-app"
+
+build:
+  stage: build
+  image: gcr.io/kaniko-project/executor:debug
+  tags:
+    - kube-runner
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${DOCKER_USER}" "${DOCKER_TOKEN}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${IMAGE_PATH}:${CI_COMMIT_TAG}"
+  only:
+    - tags
+
+deploy:
+  stage: deploy
+  image: gcr.io/cloud-builders/kubectl:latest
+  tags:
+    - kube-runner
+  script:
+    - kubectl config set-cluster kubernetes --server="$KUBE_URL" --insecure-skip-tls-verify=true
+    - kubectl config set-credentials admin --token="$KUBE_TOKEN"
+    - kubectl config set-context default --cluster=kubernetes --user=admin
+    - kubectl config use-context default
+    - sed -i "s,__TAGNAME__,${CI_COMMIT_TAG}," deployment.yaml
+    - kubectl apply -f deployment.yaml
+  only:
+    - tags
+```
+
+Сам файл можно посмотреть по <a href="./diplom-app/.gitlab-ci.yml">ссылке</a>
+
+Итоговые стадии сборки и деплоя пройдены успешно:
+
+<img src="./images/40-pipeline.png" width="800px" height="auto" />
+
+Логи стадий не вижу смысла приводить, они будут практически такими же как и те, что указаны выше.
+
+Самое время проверять.
+
+Проверяю, что все создалось и запустилось:
+
+<img src="./images/41-all-in-namespace.png" width="800px" height="auto" />
+
+<img src="./images/42-ingress.png" width="800px" height="auto" />
+
+Сделав `describe pod`, проверяю, что запущен контейнер именно с нужным образом и тегом:
+
+<img src="./images/43-describe-pod.png" width="800px" height="auto" />
+
+Ну и наконец проверка в браузере (так как работает Ingress и прописаны правила - проверить можно по доменному имени).
+
+<img src="./images/44-this-is-the-end.png" width="800px" height="auto" />
+
+<b>Все. Прекрасно. Работает!</b>
+
+<br />
+
+### Используемые источники
+
+В качестве источников информации я использовал не так много: 
+1. во-первых, пригодились прошлые ДЗ по курсу, в частности по Terraform и Gitlab, пришлось многое вспомнить оттуда;
+2. во-вторых, очень часто прибегал к официальной документации (да-да, не стоит пренебрегать ею) по проектам Gitlab, Kubernetes, Docker, MetalLB, практически во всех случаях документация достаточно подробная и супер понятная (кроме разве что пары моментов по Gitlab);
+3. в-третьих, если вдруг что-то непонятно по курсу Kubernetes - использовал канал на Youtube автора - Артур Крюков, этот человек расскажет крайне просто о сложном, там не понять будет просто невозможно, настоятельно всем рекомендую данного автора;
+4. ну и для дебага проблем - Stackoverflow и Reddit - наше все.
