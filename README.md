@@ -3490,7 +3490,7 @@ deploy:
 
 Gitlab говорит, что обе стадии завершены успешно.
 
-<details><summary><b>Job#1 - build | Log</b></sumary>
+<details><summary><b>Job#1 - build | Log</b></summary>
 
 ```bash
 Running with gitlab-runner 16.9.1 (782c6ecb)
@@ -3631,7 +3631,7 @@ Job succeeded
 
 <br />
 
-<details><summary><b>Job#2 - deploy | Log</b></sumary>
+<details><summary><b>Job#2 - deploy | Log</b></summary>
 
 ```bash
 Running with gitlab-runner 16.9.1 (782c6ecb)
@@ -3681,6 +3681,8 @@ Job succeeded
 ```
 
 </details>
+
+<br />
 
 Вроде бы обе стадии отработали корректно, образ в локальный Container Registry сохраняется, но все мои надежды были сломаны, когда я полез проверять. Все три реплики подов моего приложения находятся в ошибке `ImagePullBackOff`.
 
